@@ -7,7 +7,26 @@ interface Props {
   onSuccess?: () => void
 }
 
-const quickEmojis = ['😊','😢','😡','😴','😰','😌','😭','😤','🤒','💖']
+/* ================= MENOPAUSE SYMPTOM SUGGESTIONS ================= */
+const symptomSuggestions = [
+  'Hot flashes', 'Night sweats', 'Irregular periods', 'Vaginal dryness',
+  'Sleep problems', 'Fatigue', 'Brain fog', 'Mood swings',
+  'Joint pain', 'Headaches', 'Heart palpitations', 'Weight gain',
+  'Hair thinning', 'Dry skin', 'Itchiness', 'Bloating',
+  'Breast tenderness', 'Muscle tension', 'Dizziness', 'Urinary issues',
+  'Low libido', 'Tingling extremities', 'Anxiety', 'Depression',
+  'Digestive issues', 'Bone pain', 'Memory lapses', 'Concentration issues'
+]
+
+/* ================= MOOD SUGGESTIONS ================= */
+const moodSuggestions = [
+  'Anxious', 'Irritable', 'Sad', 'Overwhelmed', 'Frustrated',
+  'Hopeful', 'Calm', 'Grateful', 'Happy', 'Empowered',
+  'Lonely', 'Tearful', 'Restless', 'Numb', 'Confident',
+  'Exhausted', 'Peaceful', 'Worried', 'Content', 'Moody'
+]
+
+const quickEmojis = ['😊', '😢', '😡', '😴', '😰', '😌', '😭', '😤', '🤒', '💖']
 
 export default function SymptomForm({ onSuccess }: Props) {
   const [symptomType, setSymptomType] = useState('')
@@ -18,6 +37,8 @@ export default function SymptomForm({ onSuccess }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [showSymptomSuggestions, setShowSymptomSuggestions] = useState(false)
+  const [showMoodSuggestions, setShowMoodSuggestions] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -31,10 +52,22 @@ export default function SymptomForm({ onSuccess }: Props) {
     setMood('')
     setSleep(5)
     setNotes('')
+    setShowSymptomSuggestions(false)
+    setShowMoodSuggestions(false)
   }
 
   const addEmoji = (emoji: string) => {
     setMood(prev => prev + emoji)
+  }
+
+  const selectSymptom = (symptom: string) => {
+    setSymptomType(symptom)
+    setShowSymptomSuggestions(false)
+  }
+
+  const selectMood = (m: string) => {
+    setMood(m)
+    setShowMoodSuggestions(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,9 +109,8 @@ export default function SymptomForm({ onSuccess }: Props) {
       ])
 
       if (error) {
-        // Duplicate daily log handling
         if (error.message.includes('idx_unique_daily_log')) {
-          throw new Error('You have already logged today’s symptom.')
+          throw new Error('You have already logged today\u2019s symptom.')
         }
         throw error
       }
@@ -98,24 +130,62 @@ export default function SymptomForm({ onSuccess }: Props) {
     }
   }
 
+  // Filter suggestions as user types
+  const filteredSymptoms = symptomSuggestions.filter(s =>
+    s.toLowerCase().includes(symptomType.toLowerCase())
+  )
+  const filteredMoods = moodSuggestions.filter(m =>
+    m.toLowerCase().includes(mood.toLowerCase())
+  )
+
   return (
     <form
       onSubmit={handleSubmit}
       className="space-y-6"
     >
       <h2 className="text-xl font-semibold text-gray-900">
-        Log Today's Symptom
+        Log Today&apos;s Symptoms
       </h2>
 
-      {/* Symptom Type */}
-      <div>
+      {/* Symptom Type with Suggestions */}
+      <div className="relative">
         <input
           ref={inputRef}
           value={symptomType}
-          onChange={(e) => setSymptomType(e.target.value)}
-          placeholder="Hot flashes, mood swings..."
+          onChange={(e) => {
+            setSymptomType(e.target.value)
+            setShowSymptomSuggestions(true)
+          }}
+          onFocus={() => setShowSymptomSuggestions(true)}
+          placeholder="Type or select a symptom..."
           className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
         />
+
+        {/* Suggestion Chips */}
+        {showSymptomSuggestions && (
+          <div className="mt-2 max-h-40 overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5">
+              {(symptomType.trim() ? filteredSymptoms : symptomSuggestions).map((symptom) => (
+                <button
+                  type="button"
+                  key={symptom}
+                  onClick={() => selectSymptom(symptom)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${symptomType === symptom
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100'
+                    }`}
+                >
+                  {symptom}
+                </button>
+              ))}
+            </div>
+            {symptomType.trim() && filteredSymptoms.length === 0 && (
+              <p className="text-xs text-gray-400 mt-2 ml-1">
+                Custom symptom: &ldquo;{symptomType}&rdquo; — that&apos;s fine, log it!
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Severity */}
@@ -133,19 +203,50 @@ export default function SymptomForm({ onSuccess }: Props) {
         />
       </div>
 
-      {/* Mood */}
-      <div>
+      {/* Mood with Suggestions */}
+      <div className="relative">
         <label className="text-sm font-medium text-gray-700 block mb-2">
-          Mood (Describe freely, add emoji)
+          Mood
         </label>
 
         <input
           value={mood}
-          onChange={(e) => setMood(e.target.value)}
-          placeholder="Happy 😊, exhausted 😴, anxious 😰..."
+          onChange={(e) => {
+            setMood(e.target.value)
+            setShowMoodSuggestions(true)
+          }}
+          onFocus={() => setShowMoodSuggestions(true)}
+          placeholder="Type or select your mood..."
           className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
         />
 
+        {/* Mood Suggestion Chips */}
+        {showMoodSuggestions && (
+          <div className="mt-2 max-h-32 overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5">
+              {(mood.trim() ? filteredMoods : moodSuggestions).map((m) => (
+                <button
+                  type="button"
+                  key={m}
+                  onClick={() => selectMood(m)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 ${mood === m
+                      ? 'bg-pink-600 text-white shadow-sm'
+                      : 'bg-pink-50 text-pink-700 hover:bg-pink-100 border border-pink-100'
+                    }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            {mood.trim() && filteredMoods.length === 0 && (
+              <p className="text-xs text-gray-400 mt-2 ml-1">
+                Custom mood: &ldquo;{mood}&rdquo; — every feeling is valid 💜
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Quick Emojis */}
         <div className="flex flex-wrap gap-2 mt-3">
           {quickEmojis.map((emoji) => (
             <button
@@ -181,7 +282,7 @@ export default function SymptomForm({ onSuccess }: Props) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
-          placeholder="Anything else?"
+          placeholder="Anything else you want to note?"
           className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none outline-none transition"
         />
       </div>

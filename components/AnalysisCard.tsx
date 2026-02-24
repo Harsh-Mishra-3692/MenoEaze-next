@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { motion } from 'framer-motion'
 import {
   LineChart,
   Line,
@@ -15,7 +16,8 @@ import {
 
 type Symptom = {
   severity: number
-  mood: number | null
+  mood: string | null
+  symptom_type: string | null
   created_at: string
 }
 
@@ -25,15 +27,16 @@ export default function AnalysisCard({ userId }: { userId: string }) {
   const [view, setView] = useState<'weekly' | 'monthly'>('weekly')
   const [mlForecast, setMlForecast] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [aiInsight, setAiInsight] = useState<string | null>(null)
+  const [insightLoading, setInsightLoading] = useState(false)
 
-  /* ---------------- FETCH LOGS ---------------- */
   useEffect(() => {
     let isMounted = true
 
     const fetchLogs = async () => {
       const { data, error } = await supabase
         .from('symptom_logs')
-        .select('severity, mood, created_at')
+        .select('severity, mood, symptom_type, created_at')
         .eq('user_id', userId)
         .eq('is_deleted', false)
         .order('created_at', { ascending: true })
@@ -41,7 +44,7 @@ export default function AnalysisCard({ userId }: { userId: string }) {
       if (!isMounted) return
 
       if (error) {
-        setError('Failed to load analytics.')
+        setError('Unable to load your analytics.')
       } else {
         setLogs(data || [])
       }
@@ -50,12 +53,35 @@ export default function AnalysisCard({ userId }: { userId: string }) {
     }
 
     fetchLogs()
-    return () => {
-      isMounted = false
-    }
+    return () => { isMounted = false }
   }, [userId])
 
-  /* ---------------- ML MICRO SERVICE ---------------- */
+  // Fetch AI insight summary
+  useEffect(() => {
+    if (logs.length === 0) return
+
+    const fetchInsight = async () => {
+      setInsightLoading(true)
+      try {
+        const res = await fetch('/api/insight-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId })
+        })
+        const data = await res.json()
+        if (data.summary) {
+          setAiInsight(data.summary)
+        }
+      } catch {
+        // Silent fail — fallback text shown
+      } finally {
+        setInsightLoading(false)
+      }
+    }
+
+    fetchInsight()
+  }, [userId, logs.length])
+
   useEffect(() => {
     if (logs.length <= 5) return
 
@@ -85,7 +111,6 @@ export default function AnalysisCard({ userId }: { userId: string }) {
     return () => controller.abort()
   }, [logs])
 
-  /* ---------------- ANALYTICS ENGINE ---------------- */
   const analytics = useMemo(() => {
     if (logs.length === 0) return null
 
@@ -101,196 +126,197 @@ export default function AnalysisCard({ userId }: { userId: string }) {
 
     if (filtered.length === 0) return null
 
-    /* Moving Average */
     const movingAverage = filtered.map((_, index) => {
       const start = Math.max(0, index - 6)
       const subset = filtered.slice(start, index + 1)
-
-      const avg =
-        subset.reduce((sum, l) => sum + l.severity, 0) /
-        subset.length
+      const avg = subset.reduce((sum, l) => sum + l.severity, 0) / subset.length
 
       return {
-        date: new Date(filtered[index].created_at).toLocaleDateString(),
+        date: new Date(filtered[index].created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         severity: filtered[index].severity,
-        mood: filtered[index].mood ?? 5,
         smoothed: Number(avg.toFixed(2))
       }
     })
 
-    /* Linear Regression */
     const n = filtered.length
     if (n < 2) {
-      return {
-        movingAverage,
-        forecastNext: filtered[n - 1].severity,
-        trend: 'Stable'
-      }
+      return { movingAverage, forecastNext: filtered[n - 1].severity, trend: 'Stable' }
     }
 
     const x = Array.from({ length: n }, (_, i) => i)
     const y = filtered.map(l => l.severity)
-
     const xMean = x.reduce((a, b) => a + b, 0) / n
     const yMean = y.reduce((a, b) => a + b, 0) / n
-
-    const numerator = x.reduce(
-      (sum, xi, i) => sum + (xi - xMean) * (y[i] - yMean),
-      0
-    )
-
-    const denominator = x.reduce(
-      (sum, xi) => sum + (xi - xMean) ** 2,
-      0
-    )
-
+    const numerator = x.reduce((sum, xi, i) => sum + (xi - xMean) * (y[i] - yMean), 0)
+    const denominator = x.reduce((sum, xi) => sum + (xi - xMean) ** 2, 0)
     const slope = denominator === 0 ? 0 : numerator / denominator
     const intercept = yMean - slope * xMean
+    const forecastNext = Math.max(0, Math.min(10, intercept + slope * (n + 1)))
 
-    let forecastNext = intercept + slope * (n + 1)
-    forecastNext = Math.max(0, Math.min(10, forecastNext))
+    const trend = slope > 0.1 ? 'Increasing' : slope < -0.1 ? 'Decreasing' : 'Stable'
 
-    const trend =
-      slope > 0.1
-        ? 'Increasing'
-        : slope < -0.1
-        ? 'Decreasing'
-        : 'Stable'
-
-    return {
-      movingAverage,
-      forecastNext: Number(forecastNext.toFixed(2)),
-      trend
-    }
+    return { movingAverage, forecastNext: Number(forecastNext.toFixed(2)), trend }
   }, [logs, view])
 
-  /* ---------------- UI STATES ---------------- */
-
-  if (loading)
+  if (loading) {
     return (
-      <div className="bg-white p-6 rounded-2xl shadow-lg h-72 animate-pulse" />
+      <div className="h-72 rounded-2xl bg-purple-50/50 animate-pulse flex items-center justify-center">
+        <p className="text-sm text-gray-400">Loading your insights…</p>
+      </div>
     )
+  }
 
-  if (error)
+  if (error) {
     return (
-      <div className="bg-white p-6 rounded-2xl shadow-lg text-red-600">
+      <div className="p-6 rounded-2xl bg-rose-50 text-rose-600 text-sm">
         {error}
       </div>
     )
+  }
 
-  if (!analytics)
+  if (!analytics) {
     return (
-      <div className="bg-white p-6 rounded-2xl shadow-lg text-gray-500 text-center">
-        No analytics available yet. Start logging symptoms.
+      <div className="py-16 text-center">
+        <p className="text-gray-400 text-sm mb-1">No insights yet</p>
+        <p className="text-gray-400 text-xs">Start logging symptoms to see your trends and patterns 💜</p>
       </div>
     )
+  }
 
-  /* ---------------- RENDER ---------------- */
+  const trendColor =
+    analytics.trend === 'Decreasing' ? 'text-emerald-600' :
+      analytics.trend === 'Increasing' ? 'text-rose-600' :
+        'text-gray-600'
+
+  const trendEmoji =
+    analytics.trend === 'Decreasing' ? '📉' :
+      analytics.trend === 'Increasing' ? '📈' :
+        '➡️'
+
+  // Build fallback insight text
+  const fallbackInsight =
+    analytics.trend === 'Decreasing'
+      ? "Your symptoms appear to be easing — that's wonderful progress. Keep up with the habits that are helping you feel better."
+      : analytics.trend === 'Increasing'
+        ? "Your symptoms seem to be intensifying recently. Consider tracking any new triggers, and don't hesitate to reach out to your healthcare provider."
+        : "Your symptoms are holding steady. Consistent tracking helps us spot patterns — you're doing great by staying engaged with your health."
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-lg space-y-8">
+    <div className="space-y-6">
 
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h3 className="text-xl font-bold text-gray-900">
-          📊 Advanced Analytics
-        </h3>
-
-        <div className="flex gap-2">
-          {['weekly', 'monthly'].map(mode => (
-            <button
-              key={mode}
-              onClick={() => setView(mode as 'weekly' | 'monthly')}
-              className={`px-4 py-1 rounded-lg text-sm ${
-                view === mode
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-200'
+      {/* View Toggle */}
+      <div className="flex gap-2">
+        {(['weekly', 'monthly'] as const).map(mode => (
+          <button
+            key={mode}
+            onClick={() => setView(mode)}
+            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${view === mode
+              ? 'bg-purple-600 text-white shadow-sm'
+              : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
               }`}
-            >
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
-            </button>
-          ))}
-        </div>
+          >
+            {mode.charAt(0).toUpperCase() + mode.slice(1)}
+          </button>
+        ))}
       </div>
 
       {/* Chart */}
-      <div className="h-80">
+      <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={analytics.movingAverage}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" hide />
-            <YAxis yAxisId="left" domain={[0, 10]} />
-            <YAxis yAxisId="right" orientation="right" domain={[0, 10]} />
-            <Tooltip />
-            <Legend />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="severity"
-              stroke="#9333ea"
-              strokeWidth={2}
-              name="Severity"
+            <CartesianGrid strokeDasharray="3 3" stroke="#f3e8ff" />
+            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+            <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'rgba(255,255,255,0.95)',
+                borderRadius: '12px',
+                border: '1px solid #e9d5ff',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                fontSize: '12px'
+              }}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }}
             />
             <Line
-              yAxisId="right"
-              type="monotone"
-              dataKey="mood"
-              stroke="#10b981"
-              strokeWidth={2}
-              name="Mood"
-            />
-            <Line
-              yAxisId="left"
               type="monotone"
               dataKey="smoothed"
-              stroke="#ec4899"
-              strokeWidth={2}
+              stroke="#a855f7"
+              strokeWidth={2.5}
               dot={false}
               name="7-Day Avg"
+            />
+            <Line
+              type="monotone"
+              dataKey="severity"
+              stroke="#ec4899"
+              strokeWidth={1.5}
+              dot={{ r: 3, fill: '#ec4899' }}
+              name="Severity"
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Statistical Forecast */}
-      <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
-        <h4 className="font-semibold text-purple-800 mb-1">
-          📈 Statistical Forecast
-        </h4>
-        <p className="text-sm text-purple-700">
-          Next projected severity:
-          <strong> {analytics.forecastNext} / 10</strong>
-        </p>
-        <p className="text-xs mt-1">
-          Trend: <strong>{analytics.trend}</strong>
-        </p>
-      </div>
-
-      {/* ML Forecast */}
-      {mlForecast !== null && (
-        <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-          <h4 className="font-semibold text-blue-800">
-            🤖 ML Forecast
-          </h4>
-          <p className="text-sm text-blue-700">
-            ML predicted next severity:
-            <strong> {mlForecast} / 10</strong>
+      {/* Insights Row */}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-100/60"
+        >
+          <p className="text-xs text-gray-500 font-medium mb-1">
+            {trendEmoji} Forecast
           </p>
-        </div>
-      )}
+          <p className="text-lg font-semibold text-gray-800">
+            {analytics.forecastNext}<span className="text-sm text-gray-400 font-normal">/10</span>
+          </p>
+          <p className={`text-xs font-medium mt-1 ${trendColor}`}>
+            Trend: {analytics.trend}
+          </p>
+        </motion.div>
 
-      {/* Insight Summary */}
-      <div className="bg-pink-50 p-4 rounded-xl border border-pink-200">
-        <h4 className="font-semibold text-pink-800 mb-2">
-          🧠 Insight Summary
-        </h4>
-        <p className="text-sm text-pink-700">
-          Your symptom trajectory appears{' '}
-          <strong>{analytics.trend.toLowerCase()}</strong>. Continue
-          consistent tracking to improve prediction reliability.
-        </p>
+        {mlForecast !== null && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-100/60"
+          >
+            <p className="text-xs text-gray-500 font-medium mb-1">
+              🤖 ML Prediction
+            </p>
+            <p className="text-lg font-semibold text-gray-800">
+              {mlForecast}<span className="text-sm text-gray-400 font-normal">/10</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              AI-powered severity estimate
+            </p>
+          </motion.div>
+        )}
       </div>
 
+      {/* AI Insight Summary */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="bg-gradient-to-r from-rose-50/80 to-pink-50/80 rounded-xl p-4 border border-pink-100/60"
+      >
+        <p className="text-xs text-gray-500 font-medium mb-1">💜 AI Insight</p>
+        {insightLoading ? (
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-purple-400 animate-pulse" />
+            <p className="text-sm text-gray-400">Analyzing your patterns…</p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-600 leading-relaxed">
+            {aiInsight || fallbackInsight}
+          </p>
+        )}
+      </motion.div>
     </div>
   )
 }

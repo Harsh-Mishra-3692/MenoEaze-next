@@ -44,20 +44,22 @@ export default function FloatingAssistant({ userId }: Props) {
     const checkContext = async () => {
       if (!userId) return
 
+      // Check recent symptom logs for severity-based context
       const { data } = await supabase
-        .from('user_profiles')
-        .select('mood_score, symptom_severity')
-        .eq('id', userId)
-        .single()
+        .from('symptom_logs')
+        .select('severity')
+        .eq('user_id', userId)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
+        .limit(5)
 
-      if (!data) return
-
-      // Example logic: show only if severity high or mood low
-      if (data.symptom_severity >= 7 || data.mood_score <= 3) {
+      if (!data || data.length === 0) {
         setContextVisible(true)
-      } else {
-        setContextVisible(true) // keep true if you always want visible
+        return
       }
+
+      // Always visible, but could be conditionally hidden
+      setContextVisible(true)
     }
 
     checkContext()
@@ -159,16 +161,16 @@ export default function FloatingAssistant({ userId }: Props) {
         {/* Glow */}
         <div
           className={`absolute inset-0 rounded-full blur-lg opacity-60 transition ${animate
-              ? 'bg-gradient-to-r from-blue-500 to-cyan-400'
-              : 'bg-gradient-to-r from-purple-600 to-pink-500'
+            ? 'bg-gradient-to-r from-blue-500 to-cyan-400'
+            : 'bg-gradient-to-r from-purple-600 to-pink-500'
             }`}
         />
 
         {/* Main Button */}
         <div
           className={`relative w-16 h-16 rounded-full flex items-center justify-center shadow-xl text-white text-2xl transition-transform duration-300 ${animate
-              ? 'bg-gradient-to-r from-blue-500 to-cyan-400 animate-bounce'
-              : 'bg-gradient-to-r from-purple-600 to-pink-500'
+            ? 'bg-gradient-to-r from-blue-500 to-cyan-400 animate-bounce'
+            : 'bg-gradient-to-r from-purple-600 to-pink-500'
             } hover:scale-110 active:scale-95`}
         >
           🤖

@@ -10,6 +10,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -40,6 +41,10 @@ export default function AuthPage() {
           throw new Error('Password must be at least 8 characters.')
         }
 
+        if (!username.trim()) {
+          throw new Error('Please choose a display name.')
+        }
+
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -49,6 +54,14 @@ export default function AuthPage() {
         })
 
         if (error) throw error
+
+        // Create profile with username
+        if (data.user) {
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            username: username.trim()
+          })
+        }
 
         if (data.user && !data.session) {
           setMessage('Check your email to confirm your account.')
@@ -93,21 +106,19 @@ export default function AuthPage() {
         <div className="flex mb-6 border-b">
           <button
             onClick={() => setMode('login')}
-            className={`flex-1 py-2 text-sm font-medium ${
-              mode === 'login'
+            className={`flex-1 py-2 text-sm font-medium ${mode === 'login'
                 ? 'border-b-2 border-purple-600 text-purple-600'
                 : 'text-gray-500'
-            }`}
+              }`}
           >
             Login
           </button>
           <button
             onClick={() => setMode('signup')}
-            className={`flex-1 py-2 text-sm font-medium ${
-              mode === 'signup'
+            className={`flex-1 py-2 text-sm font-medium ${mode === 'signup'
                 ? 'border-b-2 border-purple-600 text-purple-600'
                 : 'text-gray-500'
-            }`}
+              }`}
           >
             Sign Up
           </button>
@@ -115,6 +126,18 @@ export default function AuthPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* Username — Signup only */}
+          {mode === 'signup' && (
+            <input
+              type="text"
+              required
+              placeholder="Choose a display name"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+            />
+          )}
 
           <input
             type="email"
@@ -155,8 +178,8 @@ export default function AuthPage() {
             {loading
               ? 'Processing...'
               : mode === 'login'
-              ? 'Login'
-              : 'Create Account'}
+                ? 'Login'
+                : 'Create Account'}
           </button>
         </form>
 

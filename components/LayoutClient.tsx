@@ -15,9 +15,10 @@ export default function LayoutClient({ children }: LayoutClientProps) {
 
   const { hideAssistant, hideHeaderFooter } = useMemo(() => {
     const isAuth = pathname.startsWith('/auth')
+    const isAssistant = pathname === '/assistant'
     return {
-      hideAssistant: isAuth,
-      hideHeaderFooter: false // change if you ever want full-blank pages
+      hideAssistant: isAuth || isAssistant,
+      hideHeaderFooter: isAssistant
     }
   }, [pathname])
 

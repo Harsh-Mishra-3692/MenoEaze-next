@@ -1,20 +1,20 @@
-import ChatWidget from '@/components/ChatWidget'
-import { supabase } from '@/lib/supabase'
+"use client"
 
-export default async function AssistantPage() {
-  const { data } = await supabase.auth.getUser()
+import { useAuth } from "@/lib/auth"
+import AssistantChat from "@/components/assistant/AssistantChat"
 
-  if (!data.user) {
+export default function AssistantPage() {
+  const { user, isAuthenticated } = useAuth()
+
+  if (!isAuthenticated || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-white bg-black">
-        Please login to use the assistant.
+      <div className="flex items-center justify-center h-screen bg-[#0a0a0f]">
+        <div className="animate-pulse text-gray-500 text-sm tracking-wide">
+          Loading your assistant…
+        </div>
       </div>
     )
   }
 
-  return (
-    <div className="min-h-screen bg-black p-8">
-      <ChatWidget userId={data.user.id} />
-    </div>
-  )
+  return <AssistantChat userId={user.id} userEmail={user.email || ""} />
 }
