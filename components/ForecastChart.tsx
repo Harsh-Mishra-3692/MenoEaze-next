@@ -38,12 +38,12 @@ export default function ForecastChart({
 
           <Area
             dataKey="upperBound"
-            stroke={false}
+            stroke="none"
             fillOpacity={0.2}
           />
           <Area
             dataKey="lowerBound"
-            stroke={false}
+            stroke="none"
             fillOpacity={0.2}
           />
 

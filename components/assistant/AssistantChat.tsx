@@ -142,7 +142,7 @@ export default function AssistantChat({ userId, userEmail }: Props) {
     const isEmptyState = messages.length === 0
 
     return (
-        <div className="flex flex-col h-screen bg-[#0a0a0f] text-white overflow-hidden">
+        <div className="flex flex-col h-[100dvh] bg-[#0a0a0f] text-white overflow-hidden">
             {/* Ambient background gradients */}
             <div className="fixed inset-0 pointer-events-none overflow-hidden">
                 <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-purple-900/20 blur-[128px] animate-[drift_20s_ease-in-out_infinite_alternate]" />
@@ -340,8 +340,8 @@ function MessageBubble({ message }: { message: Message }) {
         >
             <div
                 className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${isUser
-                        ? "bg-gradient-to-br from-purple-600/90 to-pink-600/80 text-white/95 rounded-br-md"
-                        : "bg-white/[0.06] border border-white/[0.06] text-gray-300 rounded-bl-md"
+                    ? "bg-gradient-to-br from-purple-600/90 to-pink-600/80 text-white/95 rounded-br-md"
+                    : "bg-white/[0.06] border border-white/[0.06] text-gray-300 rounded-bl-md"
                     }`}
             >
                 {isUser ? (
